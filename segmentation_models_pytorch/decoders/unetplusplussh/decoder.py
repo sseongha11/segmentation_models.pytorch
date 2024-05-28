@@ -12,7 +12,7 @@ class DecoderBlock(nn.Module):
         skip_channels,
         out_channels,
         use_batchnorm=True,
-        attention_type="scse",
+        attention_type="transformer",
     ):
         super().__init__()
         self.conv1 = md.Conv2dReLU(

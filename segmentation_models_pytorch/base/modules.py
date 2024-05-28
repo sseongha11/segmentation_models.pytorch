@@ -9,13 +9,13 @@ except ImportError:
 
 class Conv2dReLU(nn.Sequential):
     def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        padding=0,
-        stride=1,
-        use_batchnorm=True,
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            padding=0,
+            stride=1,
+            use_batchnorm=True,
     ):
 
         if use_batchnorm == "inplace" and InPlaceABN is None:
@@ -74,6 +74,45 @@ class SCSEModule(nn.Module):
         spa_se = x * spa_se
 
         return chn_se + spa_se
+
+
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, in_channels, num_heads=8, dropout_prob=0.1):
+        super(MultiHeadSelfAttention, self).__init__()
+        self.in_channels = in_channels
+        self.num_heads = num_heads
+        self.head_dim = in_channels // num_heads
+        assert (
+                self.head_dim * num_heads == in_channels
+        ), "in_channels must be divisible by num_heads"
+
+        self.query = nn.Linear(in_channels, in_channels)
+        self.key = nn.Linear(in_channels, in_channels)
+        self.value = nn.Linear(in_channels, in_channels)
+        self.out = nn.Linear(in_channels, in_channels)
+        self.dropout = nn.Dropout(dropout_prob)
+
+    def forward(self, x):
+        batch_size, channels, height, width = x.size()
+        x = x.view(batch_size, channels, -1).permute(0, 2, 1)  # (B, N, C)
+
+        queries = self.query(x)
+        keys = self.key(x)
+        values = self.value(x)
+
+        queries = queries.view(batch_size, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B, H, N, D)
+        keys = keys.view(batch_size, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B, H, N, D)
+        values = values.view(batch_size, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # (B, H, N, D)
+
+        attention_scores = torch.matmul(queries, keys.transpose(-2, -1)) / (self.head_dim ** 0.5)
+        attention_weights = F.softmax(attention_scores, dim=-1)
+        attention_weights = self.dropout(attention_weights)
+
+        attention_output = torch.matmul(attention_weights, values).permute(0, 2, 1, 3).contiguous()
+        attention_output = attention_output.view(batch_size, -1, self.num_heads * self.head_dim)
+        attention_output = self.out(attention_output)
+
+        return attention_output.permute(0, 2, 1).view(batch_size, channels, height, width)
 
 
 class ArgMax(nn.Module):
@@ -137,6 +176,8 @@ class Attention(nn.Module):
             self.attention = nn.Identity(**params)
         elif name == "scse":
             self.attention = SCSEModule(**params)
+        elif name == "transformer":
+            self.attention = MultiHeadSelfAttention(**params)
         else:
             raise ValueError("Attention {} is not implemented".format(name))
 

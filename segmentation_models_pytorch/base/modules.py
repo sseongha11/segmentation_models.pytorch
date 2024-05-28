@@ -48,19 +48,32 @@ class Conv2dReLU(nn.Sequential):
 
 
 class SCSEModule(nn.Module):
-    def __init__(self, in_channels, reduction=16):
-        super().__init__()
-        self.cSE = nn.Sequential(
+    def __init__(self, in_channels, reduction=16, dropout_prob=0.1):
+        super(SCSEModule, self).__init__()
+        self.channel_excitation = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(in_channels, in_channels // reduction, 1),
+            nn.Conv2d(in_channels, in_channels // reduction, kernel_size=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels // reduction, in_channels, 1),
-            nn.Sigmoid(),
+            nn.BatchNorm2d(in_channels // reduction),
+            nn.Conv2d(in_channels // reduction, in_channels, kernel_size=1),
+            nn.Sigmoid()
         )
-        self.sSE = nn.Sequential(nn.Conv2d(in_channels, 1, 1), nn.Sigmoid())
+        self.spatial_se = nn.Sequential(
+            nn.Conv2d(in_channels, 1, kernel_size=1),
+            nn.Sigmoid()
+        )
+        self.dropout = nn.Dropout2d(p=dropout_prob)
 
     def forward(self, x):
-        return x * self.cSE(x) + x * self.sSE(x)
+        chn_se = self.channel_excitation(x)
+        chn_se = self.dropout(chn_se)
+        chn_se = x * chn_se
+
+        spa_se = self.spatial_se(x)
+        spa_se = self.dropout(spa_se)
+        spa_se = x * spa_se
+
+        return chn_se + spa_se
 
 
 class ArgMax(nn.Module):

@@ -9,7 +9,7 @@ from segmentation_models_pytorch.base import (
 from .decoder import UnetPlusPlusDecoderSH
 
 
-class UnetPlusPlus(SegmentationModel):
+class UnetPlusPlusSH(SegmentationModel):
     """Unet++ is a full convolution neural network for image semantic segmentation. Consist of *encoder*
     and *decoder* parts connected with *skip connections*. Encoder extract features of different spatial
     resolution (skip connections) which are used by decoder to define accurate segmentation mask. Decoder of
